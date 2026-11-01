@@ -70,6 +70,22 @@ public class DhisProperties
         new VaccineProperties( "pOe0ogW4OWd", "ZzYYXq4fJie", "107", "DTaP, unspecified formulation", false )
     );
 
+    // Which DHIS2 tracked entity type/attributes carry a person's demographics -- used both
+    // when creating a brand-new tracked entity for an unmapped FHIR patient (Route A) and
+    // when reading an existing one back out as a FHIR Patient (Route B's tracked-entity
+    // sync). Defaults match the DHIS2 demo's "Person" tracked entity type.
+    @NotNull
+    private String trackedEntityType = "nEenWmSyUEp";
+
+    @NotNull
+    private String genderAttribute = "cejWyOfXge6";
+
+    @NotNull
+    private String firstNameAttribute = "w75KJ2mc4zz";
+
+    @NotNull
+    private String lastNameAttribute = "zDhUuAYrxNC";
+
     // One row of the configured vaccine catalog -- see VaccineCatalog, which turns these
     // into VaccineConfig instances at startup.
     @Data

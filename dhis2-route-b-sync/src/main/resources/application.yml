@@ -55,6 +55,13 @@ dhis2-to-fhir:
         cvx-code: "107"
         cvx-display: DTaP, unspecified formulation
         boolean-style: false
+    # Which DHIS2 tracked entity type/attributes carry a person's demographics -- used both
+    # when Route A creates a brand-new tracked entity for an unmapped FHIR patient, and when
+    # the tracked-entity sync (DHIS2 -> FHIR) reads an existing one back out as a Patient.
+    tracked-entity-type: nEenWmSyUEp
+    gender-attribute: cejWyOfXge6
+    first-name-attribute: w75KJ2mc4zz
+    last-name-attribute: zDhUuAYrxNC
   fhir:
     server-url: http://localhost:8081/fhir
     fhir-version: R4

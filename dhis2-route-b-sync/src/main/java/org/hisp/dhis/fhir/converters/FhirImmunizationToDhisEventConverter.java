@@ -34,11 +34,6 @@ public class FhirImmunizationToDhisEventConverter
     private static final String SYNC_ORIGIN_TAG_CODE = "dhis2-sync";
     private static final String CVX_SYSTEM = "http://hl7.org/fhir/sid/cvx";
 
-    private static final String PERSON_TRACKED_ENTITY_TYPE = "nEenWmSyUEp";
-    private static final String GENDER_ATTRIBUTE = "cejWyOfXge6";
-    private static final String FIRST_NAME_ATTRIBUTE = "w75KJ2mc4zz";
-    private static final String LAST_NAME_ATTRIBUTE = "zDhUuAYrxNC";
-
     private final IGenericClient fhirClient;
 
     private final Dhis2Client dhis2Client;
@@ -190,7 +185,7 @@ public class FhirImmunizationToDhisEventConverter
 
         Map<String, Object> trackedEntity = new LinkedHashMap<>();
         trackedEntity.put( "orgUnit", dhisProperties.getOrgUnit() );
-        trackedEntity.put( "trackedEntityType", PERSON_TRACKED_ENTITY_TYPE );
+        trackedEntity.put( "trackedEntityType", dhisProperties.getTrackedEntityType() );
         trackedEntity.put( "attributes", demographicAttributes( patient ) );
         trackedEntity.put( "enrollments", List.of( enrollment ) );
 
@@ -213,7 +208,7 @@ public class FhirImmunizationToDhisEventConverter
         }
 
         patient.getIdentifier().add(
-            new Identifier().setSystem( "https://play.im.dhis2.org/dev/trackedEntityInstances" )
+            new Identifier().setSystem( dhisProperties.getBaseUrl() + "/trackedEntityInstances" )
                 .setValue( newTrackedEntityId ) );
         fhirClient.update().resource( patient ).execute();
 
@@ -227,22 +222,22 @@ public class FhirImmunizationToDhisEventConverter
         String firstName = patient.getNameFirstRep().getGivenAsSingleString();
         if ( firstName != null && !firstName.isBlank() )
         {
-            attributes.add( Map.of( "attribute", FIRST_NAME_ATTRIBUTE, "value", firstName ) );
+            attributes.add( Map.of( "attribute", dhisProperties.getFirstNameAttribute(), "value", firstName ) );
         }
 
         String lastName = patient.getNameFirstRep().getFamily();
         if ( lastName != null && !lastName.isBlank() )
         {
-            attributes.add( Map.of( "attribute", LAST_NAME_ATTRIBUTE, "value", lastName ) );
+            attributes.add( Map.of( "attribute", dhisProperties.getLastNameAttribute(), "value", lastName ) );
         }
 
         if ( patient.getGender() == Enumerations.AdministrativeGender.MALE )
         {
-            attributes.add( Map.of( "attribute", GENDER_ATTRIBUTE, "value", "Male" ) );
+            attributes.add( Map.of( "attribute", dhisProperties.getGenderAttribute(), "value", "Male" ) );
         }
         else if ( patient.getGender() == Enumerations.AdministrativeGender.FEMALE )
         {
-            attributes.add( Map.of( "attribute", GENDER_ATTRIBUTE, "value", "Female" ) );
+            attributes.add( Map.of( "attribute", dhisProperties.getGenderAttribute(), "value", "Female" ) );
         }
 
         return attributes;

@@ -25,10 +25,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TrackedEntityToPatientConverter
 {
-    private static final String GENDER_ATTRIBUTE = "cejWyOfXge6";
-    private static final String FIRST_NAME_ATTRIBUTE = "w75KJ2mc4zz";
-    private static final String LAST_NAME_ATTRIBUTE = "zDhUuAYrxNC";
-
     private final DhisProperties dhisProperties;
 
     private final SyncLogRepository syncLogRepository;
@@ -50,9 +46,9 @@ public class TrackedEntityToPatientConverter
 
         patient.setManagingOrganization( new Reference( "Organization?identifier=" + orgUnit ) );
 
-        String gender = getAttributeValue( attributes, GENDER_ATTRIBUTE );
-        String firstName = getAttributeValue( attributes, FIRST_NAME_ATTRIBUTE );
-        String lastName = getAttributeValue( attributes, LAST_NAME_ATTRIBUTE );
+        String gender = getAttributeValue( attributes, dhisProperties.getGenderAttribute() );
+        String firstName = getAttributeValue( attributes, dhisProperties.getFirstNameAttribute() );
+        String lastName = getAttributeValue( attributes, dhisProperties.getLastNameAttribute() );
 
         patient.setGender( getGender( gender ) );
         patient.getName().add( new HumanName().addGiven( firstName ).setFamily( lastName ) );
