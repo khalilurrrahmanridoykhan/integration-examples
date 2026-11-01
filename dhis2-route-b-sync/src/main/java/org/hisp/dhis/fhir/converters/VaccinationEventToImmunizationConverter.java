@@ -27,6 +27,9 @@ public class VaccinationEventToImmunizationConverter
     // DHIS2 demo "Child Programme" (IpHINAT79UW), "Birth" stage (A03MvHHogjR) data element
     private static final String BCG_DOSE_DATA_ELEMENT = "bx6fsa0t90x";
 
+    private static final String SYNC_ORIGIN_TAG_SYSTEM = "https://dhis2.org/fhir/sync-origin";
+    private static final String SYNC_ORIGIN_TAG_CODE = "dhis2-sync";
+
     private final DhisProperties dhisProperties;
 
     @SuppressWarnings( "unchecked" )
@@ -54,12 +57,14 @@ public class VaccinationEventToImmunizationConverter
         // HAPI rejects a transaction referencing a Patient that doesn't already exist.
         Patient patient = new Patient();
         patient.setId( trackedEntityId );
+        patient.getMeta().addTag( SYNC_ORIGIN_TAG_SYSTEM, SYNC_ORIGIN_TAG_CODE, "Created by DHIS2-to-FHIR sync" );
         patient.getIdentifier().add(
             new Identifier().setSystem( dhisProperties.getBaseUrl() + "/api/trackedEntityInstances" )
                 .setValue( trackedEntityId ) );
 
         Immunization immunization = new Immunization();
         immunization.setId( eventId );
+        immunization.getMeta().addTag( SYNC_ORIGIN_TAG_SYSTEM, SYNC_ORIGIN_TAG_CODE, "Created by DHIS2-to-FHIR sync" );
         immunization.setStatus( Immunization.ImmunizationStatus.COMPLETED );
 
         // https://hl7.org/fhir/R4/immunization.html -- CVX code 19 = BCG
