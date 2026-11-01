@@ -7,6 +7,8 @@ import org.apache.camel.TypeConverters;
 import org.hisp.dhis.api.model.v2_39_1.OrganisationUnit;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.OrganizationAndLocation;
+import org.hisp.dhis.fhir.domain.SyncLog;
+import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Identifier;
@@ -23,12 +25,17 @@ public class OrgUnitToOrganizationAndLocationConverter implements TypeConverters
 {
     private final DhisProperties dhisProperties;
 
+    private final SyncLogRepository syncLogRepository;
+
     @Converter
     public OrganizationAndLocation orgUnitToOrganizationAndLocation( OrganisationUnit organisationUnit,
         Exchange exchange )
     {
         Organization organization = createOrganization( organisationUnit );
         Location location = createLocation( organisationUnit );
+
+        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", organisationUnit.getId().get(), "created",
+            "Organization/" + organisationUnit.getId().get() + ", Location/" + organisationUnit.getId().get() ) );
 
         return new OrganizationAndLocation( organization, location );
     }

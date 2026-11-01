@@ -1,13 +1,11 @@
 package org.hisp.dhis.fhir.converters;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.camel.Converter;
-import org.apache.camel.Exchange;
-import org.apache.camel.TypeConverters;
+import org.apache.camel.component.dhis2.api.Dhis2Resource;
 import org.apache.commons.lang3.StringUtils;
-import org.hisp.dhis.api.model.v2_39_1.Attribute__1;
-import org.hisp.dhis.api.model.v2_39_1.TrackedEntityInstance;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
+import org.hisp.dhis.fhir.domain.SyncLog;
+import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.Enumerations;
 import org.hl7.fhir.r4.model.HumanName;
 import org.hl7.fhir.r4.model.Identifier;
@@ -16,39 +14,51 @@ import org.hl7.fhir.r4.model.Reference;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
+// Ported to the new Tracker API (tracker/trackedEntities) -- the legacy
+// trackedEntityInstances endpoint this previously read is gone from current DHIS2.
+// A plain Spring bean invoked via .bean(...), not a Camel type converter -- same reason
+// as the Immunization routes: a registered @Converter keyed on Dhis2Resource was never
+// matched by Camel's converter lookup here.
 @Component
 @RequiredArgsConstructor
-public class TrackedEntityToPatientConverter implements TypeConverters
+public class TrackedEntityToPatientConverter
 {
+    private static final String GENDER_ATTRIBUTE = "cejWyOfXge6";
+    private static final String FIRST_NAME_ATTRIBUTE = "w75KJ2mc4zz";
+    private static final String LAST_NAME_ATTRIBUTE = "zDhUuAYrxNC";
 
     private final DhisProperties dhisProperties;
 
-    @Converter
-    public Patient trackedEntityToPatient( TrackedEntityInstance trackedEntity, Exchange exchange )
-    {
-        return createPatient( trackedEntity );
-    }
+    private final SyncLogRepository syncLogRepository;
 
-    private Patient createPatient( TrackedEntityInstance trackedEntity )
+    @SuppressWarnings( "unchecked" )
+    public Patient trackedEntityResourceToPatient( Dhis2Resource trackedEntity )
     {
-        String namespace = dhisProperties.getBaseUrl() + "/api/trackedEntityInstances";
+        String trackedEntityId = (String) trackedEntity.get( "trackedEntity" );
+        String orgUnit = (String) trackedEntity.get( "orgUnit" );
+        List<Map<String, Object>> attributes = (List<Map<String, Object>>) trackedEntity.get( "attributes" );
+
+        String namespace = dhisProperties.getBaseUrl() + "/trackedEntityInstances";
 
         Patient patient = new Patient();
-        patient.setId( trackedEntity.getTrackedEntityInstance() );
-
-        String gender = getAttributeValue( trackedEntity, "cejWyOfXge6" );
-        String firstName = getAttributeValue( trackedEntity, "w75KJ2mc4zz" );
-        String lastName = getAttributeValue( trackedEntity, "zDhUuAYrxNC" );
+        patient.setId( trackedEntityId );
 
         patient.getIdentifier().add(
-            new Identifier().setSystem( namespace ).setValue( trackedEntity.getTrackedEntityInstance() )
-        );
+            new Identifier().setSystem( namespace ).setValue( trackedEntityId ) );
 
-        patient.setManagingOrganization( new Reference( "Organization?identifier=" + trackedEntity.getOrgUnit() ) );
+        patient.setManagingOrganization( new Reference( "Organization?identifier=" + orgUnit ) );
+
+        String gender = getAttributeValue( attributes, GENDER_ATTRIBUTE );
+        String firstName = getAttributeValue( attributes, FIRST_NAME_ATTRIBUTE );
+        String lastName = getAttributeValue( attributes, LAST_NAME_ATTRIBUTE );
 
         patient.setGender( getGender( gender ) );
         patient.getName().add( new HumanName().addGiven( firstName ).setFamily( lastName ) );
+
+        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", trackedEntityId, "created",
+            "Patient/" + trackedEntityId ) );
 
         return patient;
     }
@@ -71,18 +81,19 @@ public class TrackedEntityToPatientConverter implements TypeConverters
         }
     }
 
-    // Inefficient, only for demo purpose.
-    public String getAttributeValue( TrackedEntityInstance trackedEntity, String id )
+    private String getAttributeValue( List<Map<String, Object>> attributes, String id )
     {
-        List<Attribute__1> attributes = trackedEntity.getAttributes().get();
-        for ( Attribute__1 attribute : attributes )
+        if ( attributes == null )
         {
-            if ( attribute.getAttribute().get().equals( id ) )
+            return null;
+        }
+        for ( Map<String, Object> attribute : attributes )
+        {
+            if ( id.equals( attribute.get( "attribute" ) ) )
             {
-                return StringUtils.trimToEmpty( attribute.getValue().get() );
+                return StringUtils.trimToEmpty( (String) attribute.get( "value" ) );
             }
         }
-
         return null;
     }
 }

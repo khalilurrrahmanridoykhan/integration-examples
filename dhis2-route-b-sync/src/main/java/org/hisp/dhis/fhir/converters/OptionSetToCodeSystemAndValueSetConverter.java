@@ -8,6 +8,8 @@ import org.hisp.dhis.api.model.v2_39_1.Option;
 import org.hisp.dhis.api.model.v2_39_1.OptionSet;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.CodeSystemAndValueSet;
+import org.hisp.dhis.fhir.domain.SyncLog;
+import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.CodeSystem;
 import org.hl7.fhir.r4.model.Enumerations;
 import org.hl7.fhir.r4.model.Identifier;
@@ -22,11 +24,16 @@ public class OptionSetToCodeSystemAndValueSetConverter implements TypeConverters
 {
     private final DhisProperties dhisProperties;
 
+    private final SyncLogRepository syncLogRepository;
+
     @Converter
     public CodeSystemAndValueSet optionSetToCodeSystemAndValueSet( OptionSet optionSet, Exchange exchange )
     {
         CodeSystem codeSystem = createCodeSystem( optionSet );
         ValueSet valueSet = createValueSet( optionSet );
+
+        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", optionSet.getId().get(), "created",
+            "CodeSystem/" + optionSet.getId().get() + ", ValueSet/" + optionSet.getId().get() ) );
 
         return new CodeSystemAndValueSet( codeSystem, valueSet );
     }

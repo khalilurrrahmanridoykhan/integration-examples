@@ -27,7 +27,6 @@ public class SyncTriggerController
         "immunization-to-dhis2", "direct:fhirToDhis2Sync",
         "org-units-to-fhir", "direct:orgUnitsToFhirSync",
         "option-sets-to-fhir", "direct:optionSetsToFhirSync",
-        // still 404s against current DHIS2 (legacy API) -- see the route's own comment
         "tracked-entities-to-fhir", "direct:trackedEntitiesToFhirSync"
     );
 
