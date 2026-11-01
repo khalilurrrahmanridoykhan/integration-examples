@@ -32,7 +32,7 @@ public class OptionSetToCodeSystemAndValueSetConverter implements TypeConverters
         CodeSystem codeSystem = createCodeSystem( optionSet );
         ValueSet valueSet = createValueSet( optionSet );
 
-        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", optionSet.getId().get(), "created",
+        syncLogRepository.save( new SyncLog( "option-set", "dhis2-to-fhir", optionSet.getId().get(), "created",
             "CodeSystem/" + optionSet.getId().get() + ", ValueSet/" + optionSet.getId().get() ) );
 
         return new CodeSystemAndValueSet( codeSystem, valueSet );

@@ -58,7 +58,8 @@ public class FhirImmunizationToDhisEventConverter
                 && SYNC_ORIGIN_TAG_CODE.equals( tag.getCode() ) );
         if ( isOwnOutput )
         {
-            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-own-output", null ) );
+            syncLogRepository.save(
+                new SyncLog( "immunization", "fhir-to-dhis2", immunizationId, "skipped-own-output", null ) );
             return null;
         }
 
@@ -70,7 +71,8 @@ public class FhirImmunizationToDhisEventConverter
 
         if ( vaccine.isEmpty() )
         {
-            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-unknown-vaccine", null ) );
+            syncLogRepository.save(
+                new SyncLog( "immunization", "fhir-to-dhis2", immunizationId, "skipped-unknown-vaccine", null ) );
             return null;
         }
 
@@ -88,12 +90,12 @@ public class FhirImmunizationToDhisEventConverter
             if ( newTrackedEntityId == null )
             {
                 syncLogRepository.save(
-                    new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-new-patient-create-failed", null ) );
+                    new SyncLog( "immunization", "fhir-to-dhis2", immunizationId, "skipped-new-patient-create-failed", null ) );
                 return null;
             }
 
             // The nested import above already created the event -- nothing left to POST.
-            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "created-new-tracked-entity",
+            syncLogRepository.save( new SyncLog( "immunization", "fhir-to-dhis2", immunizationId, "created-new-tracked-entity",
                 "DHIS2 trackedEntity/" + newTrackedEntityId + " (" + vaccine.get().getCvxDisplay() + ")" ) );
             return null;
         }
@@ -122,7 +124,8 @@ public class FhirImmunizationToDhisEventConverter
         }
         if ( existingEventId == null )
         {
-            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-no-existing-event", null ) );
+            syncLogRepository.save(
+                new SyncLog( "immunization", "fhir-to-dhis2", immunizationId, "skipped-no-existing-event", null ) );
             return null;
         }
 
@@ -144,7 +147,7 @@ public class FhirImmunizationToDhisEventConverter
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put( "events", List.of( event ) );
 
-        syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "updated",
+        syncLogRepository.save( new SyncLog( "immunization", "fhir-to-dhis2", immunizationId, "updated",
             "DHIS2 event/" + existingEventId + " (" + vaccine.get().getCvxDisplay()
                 + ", trackedEntity " + trackedEntityId + ")" ) );
 

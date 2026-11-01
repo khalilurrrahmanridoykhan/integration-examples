@@ -34,7 +34,7 @@ public class OrgUnitToOrganizationAndLocationConverter implements TypeConverters
         Organization organization = createOrganization( organisationUnit );
         Location location = createLocation( organisationUnit );
 
-        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", organisationUnit.getId().get(), "created",
+        syncLogRepository.save( new SyncLog( "org-unit", "dhis2-to-fhir", organisationUnit.getId().get(), "created",
             "Organization/" + organisationUnit.getId().get() + ", Location/" + organisationUnit.getId().get() ) );
 
         return new OrganizationAndLocation( organization, location );

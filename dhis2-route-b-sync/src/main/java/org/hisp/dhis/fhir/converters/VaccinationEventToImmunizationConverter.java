@@ -66,7 +66,7 @@ public class VaccinationEventToImmunizationConverter
 
             if ( !vaccine.isGiven( value ) )
             {
-                syncLogRepository.save( new SyncLog( "dhis2-to-fhir", eventId,
+                syncLogRepository.save( new SyncLog( "immunization", "dhis2-to-fhir", eventId,
                     "skipped-not-" + vaccine.getCvxDisplay(), null ) );
                 continue;
             }
@@ -112,7 +112,7 @@ public class VaccinationEventToImmunizationConverter
             new Identifier().setSystem( dhisProperties.getBaseUrl() + "/api/tracker/events" )
                 .setValue( immunizationId ) );
 
-        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", eventId, "created",
+        syncLogRepository.save( new SyncLog( "immunization", "dhis2-to-fhir", eventId, "created",
             "Immunization/" + immunizationId + " (" + vaccine.getCvxDisplay() + "), Patient/" + trackedEntityId ) );
 
         return new ImmunizationAndPatient( immunization, patient );

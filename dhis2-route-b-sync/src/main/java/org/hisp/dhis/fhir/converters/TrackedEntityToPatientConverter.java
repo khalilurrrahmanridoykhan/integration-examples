@@ -53,7 +53,7 @@ public class TrackedEntityToPatientConverter
         patient.setGender( getGender( gender ) );
         patient.getName().add( new HumanName().addGiven( firstName ).setFamily( lastName ) );
 
-        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", trackedEntityId, "created",
+        syncLogRepository.save( new SyncLog( "tracked-entity", "dhis2-to-fhir", trackedEntityId, "created",
             "Patient/" + trackedEntityId ) );
 
         return patient;
