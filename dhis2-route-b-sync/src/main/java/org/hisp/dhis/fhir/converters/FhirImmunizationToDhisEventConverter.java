@@ -8,10 +8,14 @@ import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
 import org.hl7.fhir.r4.model.Coding;
+import org.hl7.fhir.r4.model.Enumerations;
+import org.hl7.fhir.r4.model.Identifier;
 import org.hl7.fhir.r4.model.Immunization;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +34,10 @@ public class FhirImmunizationToDhisEventConverter
     private static final String CVX_SYSTEM = "http://hl7.org/fhir/sid/cvx";
 
     private static final String ORG_UNIT = "DiszpKrYNg8";
+    private static final String PERSON_TRACKED_ENTITY_TYPE = "nEenWmSyUEp";
+    private static final String GENDER_ATTRIBUTE = "cejWyOfXge6";
+    private static final String FIRST_NAME_ATTRIBUTE = "w75KJ2mc4zz";
+    private static final String LAST_NAME_ATTRIBUTE = "zDhUuAYrxNC";
 
     private final IGenericClient fhirClient;
 
@@ -71,12 +79,23 @@ public class FhirImmunizationToDhisEventConverter
         String patientId = patientReference.substring( patientReference.lastIndexOf( '/' ) + 1 );
         Patient patient = fhirClient.read().resource( Patient.class ).withId( patientId ).execute();
 
-        // Only patients already known to DHIS2 (carrying a trackedEntity identifier, the
-        // same convention Route B writes) can be mapped -- creating a brand-new DHIS2
-        // tracked entity for an unknown patient is out of scope for this first version.
+        // A patient with no DHIS2 identifier yet is a genuinely new person as far as DHIS2
+        // is concerned -- create a tracked entity, enrollment, and this vaccine's event in
+        // one atomic Tracker import (confirmed live that DHIS2 supports nested creation),
+        // then write the new id back onto the FHIR Patient so the next run recognizes them.
         if ( patient.getIdentifier().isEmpty() )
         {
-            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-not-mapped", null ) );
+            String newTrackedEntityId = createTrackedEntityWithEnrollmentAndEvent( patient, immunization, vaccine.get() );
+            if ( newTrackedEntityId == null )
+            {
+                syncLogRepository.save(
+                    new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-new-patient-create-failed", null ) );
+                return null;
+            }
+
+            // The nested import above already created the event -- nothing left to POST.
+            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "created-new-tracked-entity",
+                "DHIS2 trackedEntity/" + newTrackedEntityId + " (" + vaccine.get().getCvxDisplay() + ")" ) );
             return null;
         }
         String trackedEntityId = patient.getIdentifierFirstRep().getValue();
@@ -131,5 +150,117 @@ public class FhirImmunizationToDhisEventConverter
                 + ", trackedEntity " + trackedEntityId + ")" ) );
 
         return payload;
+    }
+
+    // Confirmed live against the real DHIS2 demo: a single tracker import can create a
+    // trackedEntity, its enrollment, and a first event all nested in one atomic call, with
+    // DHIS2 assigning the new trackedEntity id. This call is made directly (not via the
+    // Camel dhis2:// route step) because the id it returns is needed synchronously, right
+    // here, to write back onto the FHIR Patient -- the route's own POST step doesn't read
+    // the response at all.
+    @SuppressWarnings( "unchecked" )
+    private String createTrackedEntityWithEnrollmentAndEvent( Patient patient, Immunization immunization,
+        VaccineConfig vaccine )
+    {
+        Map<String, Object> dataValue = new LinkedHashMap<>();
+        dataValue.put( "dataElement", vaccine.getDataElementId() );
+        dataValue.put( "value", vaccine.valueWhenGiven() );
+
+        String occurredAt = immunization.getOccurrenceDateTimeType().getValueAsString();
+
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put( "program", VaccineCatalog.PROGRAM );
+        event.put( "programStage", vaccine.getProgramStageId() );
+        event.put( "orgUnit", ORG_UNIT );
+        event.put( "occurredAt", occurredAt );
+        event.put( "status", "COMPLETED" );
+        event.put( "dataValues", List.of( dataValue ) );
+
+        Map<String, Object> enrollment = new LinkedHashMap<>();
+        enrollment.put( "program", VaccineCatalog.PROGRAM );
+        enrollment.put( "orgUnit", ORG_UNIT );
+        enrollment.put( "status", "ACTIVE" );
+        enrollment.put( "enrolledAt", LocalDate.now().toString() );
+        enrollment.put( "occurredAt", occurredAt );
+        enrollment.put( "events", List.of( event ) );
+
+        Map<String, Object> trackedEntity = new LinkedHashMap<>();
+        trackedEntity.put( "orgUnit", ORG_UNIT );
+        trackedEntity.put( "trackedEntityType", PERSON_TRACKED_ENTITY_TYPE );
+        trackedEntity.put( "attributes", demographicAttributes( patient ) );
+        trackedEntity.put( "enrollments", List.of( enrollment ) );
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put( "trackedEntities", List.of( trackedEntity ) );
+
+        // async=false so the created trackedEntity id is available in this same response --
+        // the usual "Tracker job added" response (see Route A's history) only gives a job
+        // id, not the result, which is no good when the id is needed right here.
+        Map<String, Object> response = dhis2Client.post( "tracker" )
+            .withResource( payload )
+            .withParameter( "async", "false" )
+            .transfer()
+            .returnAs( Map.class );
+
+        String newTrackedEntityId = extractNewTrackedEntityId( response );
+        if ( newTrackedEntityId == null )
+        {
+            return null;
+        }
+
+        patient.getIdentifier().add(
+            new Identifier().setSystem( "https://play.im.dhis2.org/dev/trackedEntityInstances" )
+                .setValue( newTrackedEntityId ) );
+        fhirClient.update().resource( patient ).execute();
+
+        return newTrackedEntityId;
+    }
+
+    private List<Map<String, Object>> demographicAttributes( Patient patient )
+    {
+        List<Map<String, Object>> attributes = new ArrayList<>();
+
+        String firstName = patient.getNameFirstRep().getGivenAsSingleString();
+        if ( firstName != null && !firstName.isBlank() )
+        {
+            attributes.add( Map.of( "attribute", FIRST_NAME_ATTRIBUTE, "value", firstName ) );
+        }
+
+        String lastName = patient.getNameFirstRep().getFamily();
+        if ( lastName != null && !lastName.isBlank() )
+        {
+            attributes.add( Map.of( "attribute", LAST_NAME_ATTRIBUTE, "value", lastName ) );
+        }
+
+        if ( patient.getGender() == Enumerations.AdministrativeGender.MALE )
+        {
+            attributes.add( Map.of( "attribute", GENDER_ATTRIBUTE, "value", "Male" ) );
+        }
+        else if ( patient.getGender() == Enumerations.AdministrativeGender.FEMALE )
+        {
+            attributes.add( Map.of( "attribute", GENDER_ATTRIBUTE, "value", "Female" ) );
+        }
+
+        return attributes;
+    }
+
+    @SuppressWarnings( "unchecked" )
+    private String extractNewTrackedEntityId( Map<String, Object> response )
+    {
+        try
+        {
+            Map<String, Object> bundleReport = (Map<String, Object>) response.get( "bundleReport" );
+            Map<String, Object> typeReportMap = (Map<String, Object>) bundleReport.get( "typeReportMap" );
+            Map<String, Object> trackedEntityReport = (Map<String, Object>) typeReportMap.get( "TRACKED_ENTITY" );
+            List<Map<String, Object>> objectReports =
+                (List<Map<String, Object>>) trackedEntityReport.get( "objectReports" );
+            return (String) objectReports.get( 0 ).get( "uid" );
+        }
+        catch ( RuntimeException e )
+        {
+            // Malformed/unexpected response shape -- treat as a failed create rather than
+            // propagating a ClassCastException/NPE out of a single item in the split.
+            return null;
+        }
     }
 }

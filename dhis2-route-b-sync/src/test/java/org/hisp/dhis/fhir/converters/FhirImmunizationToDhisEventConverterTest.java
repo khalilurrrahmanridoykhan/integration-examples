@@ -4,10 +4,14 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.IRead;
 import ca.uhn.fhir.rest.gclient.IReadExecutable;
 import ca.uhn.fhir.rest.gclient.IReadTyped;
+import ca.uhn.fhir.rest.gclient.IUpdate;
+import ca.uhn.fhir.rest.gclient.IUpdateTyped;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
+import org.hisp.dhis.integration.sdk.api.Dhis2Response;
 import org.hisp.dhis.integration.sdk.api.operation.GetOperation;
+import org.hisp.dhis.integration.sdk.api.operation.PostOperation;
 import org.hisp.dhis.integration.sdk.api.operation.SimpleCollectOperation;
 import org.hisp.dhis.integration.sdk.internal.SimpleIterableDhis2Response;
 import org.hl7.fhir.r4.model.CodeableConcept;
@@ -29,6 +33,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -103,15 +108,67 @@ class FhirImmunizationToDhisEventConverterTest
         when( readExecutable.execute() ).thenReturn( patientToReturn );
     }
 
+    @SuppressWarnings( "unchecked" )
+    private void stubTrackerImport( Map<String, Object> response )
+    {
+        PostOperation postOperation = org.mockito.Mockito.mock( PostOperation.class );
+        Dhis2Response dhis2Response = org.mockito.Mockito.mock( Dhis2Response.class );
+
+        when( dhis2Client.post( "tracker" ) ).thenReturn( postOperation );
+        when( postOperation.withResource( any() ) ).thenReturn( postOperation );
+        when( postOperation.withParameter( "async", "false" ) ).thenReturn( postOperation );
+        when( postOperation.transfer() ).thenReturn( dhis2Response );
+        when( dhis2Response.returnAs( Map.class ) ).thenReturn( response );
+    }
+
+    private void stubPatientUpdate()
+    {
+        IUpdate update = org.mockito.Mockito.mock( IUpdate.class );
+        IUpdateTyped updateTyped = org.mockito.Mockito.mock( IUpdateTyped.class );
+
+        when( fhirClient.update() ).thenReturn( update );
+        when( update.resource( any( Patient.class ) ) ).thenReturn( updateTyped );
+        when( updateTyped.execute() ).thenReturn( null );
+    }
+
+    // A map shaped like DHIS2's real nested tracker-import response (confirmed live), just
+    // the one field this converter actually reads out of it.
+    private Map<String, Object> trackerImportResponseWithNewTrackedEntityId( String newTrackedEntityId )
+    {
+        return Map.of( "bundleReport", Map.of( "typeReportMap", Map.of( "TRACKED_ENTITY",
+            Map.of( "objectReports", List.of( Map.of( "uid", newTrackedEntityId ) ) ) ) ) );
+    }
+
     @Test
-    void patientWithNoDhis2Identifier_skipsAsNotMapped()
+    void patientWithNoDhis2Identifier_createsNewTrackedEntityAndWritesIdBackToFhir()
+    {
+        Patient patient = new Patient();
+        patient.getNameFirstRep().addGiven( "Jane" ).setFamily( "Doe" );
+        patient.setGender( org.hl7.fhir.r4.model.Enumerations.AdministrativeGender.FEMALE );
+        stubPatientRead( patient );
+        stubTrackerImport( trackerImportResponseWithNewTrackedEntityId( "newTe123" ) );
+        stubPatientUpdate();
+
+        Map<String, Object> result = converter.immunizationToDhisEventPayload( measlesImmunization( false ) );
+
+        // The route has nothing left to POST -- the nested tracker import above already
+        // created the trackedEntity, enrollment, and event in one atomic call.
+        assertNull( result );
+        assertEquals( "newTe123", patient.getIdentifierFirstRep().getValue() );
+        verify( fhirClient ).update();
+    }
+
+    @Test
+    void trackerImportRespondsWithAnUnexpectedShape_skipsRatherThanThrowing()
     {
         stubPatientRead( new Patient() );
+        // Not the real DHIS2 response shape (e.g. the "Tracker job added" async response,
+        // or a validation error) -- must not NPE/ClassCastException out of the split.
+        stubTrackerImport( Map.of( "status", "ERROR" ) );
 
         Map<String, Object> result = converter.immunizationToDhisEventPayload( measlesImmunization( false ) );
 
         assertNull( result );
-        verifyNoInteractions( dhis2Client );
     }
 
     @SuppressWarnings( { "unchecked", "rawtypes" } )
