@@ -17,7 +17,7 @@ public class OptionSetToFhirBundleRoute extends RouteBuilder
     @Override
     public void configure()
     {
-        from( "timer://foo?repeatCount=1" ).routeId( "dhis2-os-to-fhir-bundle" )
+        from( "timer://osSync?period=3600000" ).routeId( "dhis2-os-to-fhir-bundle" )
             .to("dhis2://get/collection?path=optionSets&arrayName=optionSets&fields=id,code,name,description,version,options[id,code,name]&filter=id:eq:HB33RvLvVZe&client=#dhis2Client")
             .log( "Converting DHIS2 options sets to FHIR code systems and value sets..." )
             .split().body().aggregationStrategy( new CodeSystemAndValueSetBundleAggregationStrategy() )

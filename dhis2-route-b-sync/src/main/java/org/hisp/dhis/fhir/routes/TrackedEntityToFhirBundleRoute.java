@@ -19,7 +19,7 @@ public class TrackedEntityToFhirBundleRoute extends RouteBuilder
     @Override
     public void configure()
     {
-        from( "timer://foo?repeatCount=1" ).routeId( "dhis2-te-to-fhir-bundle" )
+        from( "timer://teSync?period=3600000" ).routeId( "dhis2-te-to-fhir-bundle" )
             .setHeader( "CamelDhis2.queryParams", () -> Map.of( "ou", "DiszpKrYNg8", "program", "IpHINAT79UW" ) )
             .to("dhis2://get/collection?path=trackedEntityInstances&arrayName=trackedEntityInstances&client=#dhis2Client")
             .log( "Converting DHIS2 tracked entities to FHIR patients..." )

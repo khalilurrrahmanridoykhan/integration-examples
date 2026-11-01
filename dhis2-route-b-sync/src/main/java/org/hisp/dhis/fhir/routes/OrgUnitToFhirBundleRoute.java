@@ -17,7 +17,7 @@ public class OrgUnitToFhirBundleRoute extends RouteBuilder
     @Override
     public void configure()
     {
-        from( "timer://foo?repeatCount=1" ).routeId( "dhis2-ou-to-fhir-bundle" )
+        from( "timer://ouSync?period=3600000" ).routeId( "dhis2-ou-to-fhir-bundle" )
             .to("dhis2://get/collection?path=organisationUnits&arrayName=organisationUnits&fields=id,code,name,description,parent[id]&client=#dhis2Client")
             .log( "Converting DHIS2 organisation units to FHIR organizations and locations..." )
             .split().body().aggregationStrategy( new OrganizationAndLocationBundleAggregationStrategy() )
