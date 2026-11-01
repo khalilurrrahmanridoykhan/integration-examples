@@ -1,0 +1,106 @@
+package org.hisp.dhis.fhir.converters;
+
+import ca.uhn.fhir.rest.client.api.IGenericClient;
+import lombok.RequiredArgsConstructor;
+import org.hisp.dhis.integration.sdk.api.Dhis2Client;
+import org.hl7.fhir.r4.model.Immunization;
+import org.hl7.fhir.r4.model.Patient;
+import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+// Route A: FHIR -> DHIS2 (the reverse of VaccinationEventToImmunizationConverter).
+// A plain Spring bean invoked via .bean(...) from the route, not a Camel type converter --
+// same lesson learned on the DHIS2-to-FHIR side: keep conversion logic in a directly-callable
+// bean rather than fighting Camel's type-converter registry.
+@Component
+@RequiredArgsConstructor
+public class FhirImmunizationToDhisEventConverter
+{
+    private static final String SYNC_ORIGIN_TAG_SYSTEM = "https://dhis2.org/fhir/sync-origin";
+    private static final String SYNC_ORIGIN_TAG_CODE = "dhis2-sync";
+
+    private static final String PROGRAM = "IpHINAT79UW";
+    private static final String PROGRAM_STAGE = "A03MvHHogjR";
+    private static final String ORG_UNIT = "DiszpKrYNg8";
+    private static final String BCG_DOSE_DATA_ELEMENT = "bx6fsa0t90x";
+
+    private final IGenericClient fhirClient;
+
+    private final Dhis2Client dhis2Client;
+
+    public Map<String, Object> immunizationToDhisEventPayload( Immunization immunization )
+    {
+        // Origin check -- skip anything this same service already pushed into FHIR via
+        // Route B, otherwise this would create a DHIS2 event from data that came from DHIS2
+        // in the first place (the sync loop described in the plan's origin-tracking section).
+        // Using the explicit stream form rather than Meta.getTag(system, code): that overload
+        // resolves via a generic-interface bridge method and was observed to never match here.
+        boolean isOwnOutput = immunization.getMeta().getTag().stream()
+            .anyMatch( tag -> SYNC_ORIGIN_TAG_SYSTEM.equals( tag.getSystem() )
+                && SYNC_ORIGIN_TAG_CODE.equals( tag.getCode() ) );
+        if ( isOwnOutput )
+        {
+            return null;
+        }
+
+        String patientReference = immunization.getPatient().getReference();
+        String patientId = patientReference.substring( patientReference.lastIndexOf( '/' ) + 1 );
+        Patient patient = fhirClient.read().resource( Patient.class ).withId( patientId ).execute();
+
+        // Only patients already known to DHIS2 (carrying a trackedEntity identifier, the
+        // same convention Route B writes) can be mapped -- creating a brand-new DHIS2
+        // tracked entity for an unknown patient is out of scope for this first version.
+        if ( patient.getIdentifier().isEmpty() )
+        {
+            return null;
+        }
+        String trackedEntityId = patient.getIdentifierFirstRep().getValue();
+
+        // "Birth" is a non-repeatable program stage -- DHIS2 rejects a second new event
+        // for an enrollment that already has one there (E1039). The existing event must be
+        // updated instead of creating a new one, so resolve both its id and its enrollment.
+        Iterable<Map> existingEvents = dhis2Client.get( "tracker/events" )
+            .withFields( "event,enrollment" )
+            .withoutPaging()
+            .withParameter( "trackedEntity", trackedEntityId )
+            .withParameter( "program", PROGRAM )
+            .withParameter( "programStage", PROGRAM_STAGE )
+            .transfer()
+            .returnAs( Map.class, "events" );
+
+        String existingEventId = null;
+        String enrollmentId = null;
+        for ( Map existingEvent : existingEvents )
+        {
+            existingEventId = (String) existingEvent.get( "event" );
+            enrollmentId = (String) existingEvent.get( "enrollment" );
+            break;
+        }
+        if ( existingEventId == null )
+        {
+            return null;
+        }
+
+        Map<String, Object> dataValue = new LinkedHashMap<>();
+        dataValue.put( "dataElement", BCG_DOSE_DATA_ELEMENT );
+        dataValue.put( "value", "true" );
+
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put( "event", existingEventId );
+        event.put( "program", PROGRAM );
+        event.put( "programStage", PROGRAM_STAGE );
+        event.put( "orgUnit", ORG_UNIT );
+        event.put( "trackedEntity", trackedEntityId );
+        event.put( "enrollment", enrollmentId );
+        event.put( "occurredAt", immunization.getOccurrenceDateTimeType().getValueAsString() );
+        event.put( "status", "COMPLETED" );
+        event.put( "dataValues", List.of( dataValue ) );
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put( "events", List.of( event ) );
+        return payload;
+    }
+}

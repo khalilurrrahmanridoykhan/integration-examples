@@ -66,6 +66,15 @@
             <artifactId>camel-dhis2</artifactId>
             <version>3.0.0</version>
         </dependency>
+        <!-- dhis2-java-sdk 2.1.0's POST path calls RequestBody.create(byte[]), a method
+             that doesn't exist on the okhttp 3.14.9 it itself declares as its dependency
+             (only GET was ever exercised before, so this packaging bug went unnoticed).
+             Forcing a 4.x okhttp, which does have that overload, fixes it. -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.9.3</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
