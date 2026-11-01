@@ -69,12 +69,26 @@ public class AbstractRouteTestCase
             .waitingFor( new HttpWaitStrategy().forStatusCode( 200 ).withStartupTimeout( Duration.ofSeconds( 120 ) ) );
     }
 
+    // Guards the one-time container setup below. Deliberately NOT "POSTGRESQL_CONTAINER ==
+    // null" -- that field is assigned before .start() is called, so if .start() throws (a
+    // transient Docker-detection failure, confirmed to happen live on this machine), the
+    // field is already non-null and every later test class in this JVM would silently skip
+    // the whole block below, INCLUDING the base-url/server-url System.setProperty calls --
+    // meaning the "ephemeral" test suite silently falls through to this module's default
+    // application.yml values (the real production DHIS2 demo and whatever is listening on
+    // localhost:8081) instead of failing loudly. Found live: a tracked-entity id created
+    // minutes earlier against the real production demo turned up in this supposedly-isolated
+    // test's results. This flag is only set true after every step below succeeds, so a failed
+    // attempt makes the next test class retry the entire setup from scratch instead of
+    // inheriting the broken, half-initialized state.
+    private static boolean containersReady = false;
+
     @BeforeAll
     public static void beforeAll()
         throws
         Exception
     {
-        if (POSTGRESQL_CONTAINER == null)
+        if ( !containersReady )
         {
             File file = new File( "../db-dump/dhis2-db-sierra-leone.sql.gz" );
             if ( !file.exists() )
@@ -95,6 +109,7 @@ public class AbstractRouteTestCase
                 String.format( "http://localhost:%s/api", DHIS2_CONTAINER.getFirstMappedPort() ) );
             System.setProperty( "dhis2-to-fhir.fhir.server-url",
                 String.format( "http://localhost:%s/fhir", FHIR_CONTAINER.getFirstMappedPort() ) );
+            containersReady = true;
         }
     }
 
@@ -106,6 +121,15 @@ public class AbstractRouteTestCase
         AdviceWith.adviceWith( camelContext, "dhis2-te-to-fhir-bundle", r -> r.replaceFromWith( "direct:te2fhir" ) );
         AdviceWith.adviceWith( camelContext, "dhis2-ou-to-fhir-bundle", r -> r.replaceFromWith( "direct:ou2fhir" ) );
         AdviceWith.adviceWith( camelContext, "dhis2-os-to-fhir-bundle", r -> r.replaceFromWith( "direct:os2fhir" ) );
+        // These two Immunization routes (Route A/B) also have their own timer://...?period=
+        // -triggered route alongside the direct:... one; left un-advised, that timer fires
+        // once on camelContext.start() below just like any other, running a real sync against
+        // whatever DHIS2/FHIR server is configured. Advised away here for the same reason as
+        // the three routes above: no test in this suite exercises these two.
+        AdviceWith.adviceWith( camelContext, "dhis2-vaccination-to-fhir-immunization",
+            r -> r.replaceFromWith( "direct:imm2fhir" ) );
+        AdviceWith.adviceWith( camelContext, "fhir-immunization-to-dhis2-event",
+            r -> r.replaceFromWith( "direct:fhir2imm" ) );
         camelContext.start();
     }
 }
