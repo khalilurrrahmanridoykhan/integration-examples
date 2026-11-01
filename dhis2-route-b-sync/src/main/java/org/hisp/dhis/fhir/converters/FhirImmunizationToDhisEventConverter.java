@@ -2,6 +2,8 @@ package org.hisp.dhis.fhir.converters;
 
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import lombok.RequiredArgsConstructor;
+import org.hisp.dhis.fhir.domain.SyncLog;
+import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
 import org.hl7.fhir.r4.model.Immunization;
 import org.hl7.fhir.r4.model.Patient;
@@ -31,8 +33,12 @@ public class FhirImmunizationToDhisEventConverter
 
     private final Dhis2Client dhis2Client;
 
+    private final SyncLogRepository syncLogRepository;
+
     public Map<String, Object> immunizationToDhisEventPayload( Immunization immunization )
     {
+        String immunizationId = immunization.getIdElement().getIdPart();
+
         // Origin check -- skip anything this same service already pushed into FHIR via
         // Route B, otherwise this would create a DHIS2 event from data that came from DHIS2
         // in the first place (the sync loop described in the plan's origin-tracking section).
@@ -43,6 +49,7 @@ public class FhirImmunizationToDhisEventConverter
                 && SYNC_ORIGIN_TAG_CODE.equals( tag.getCode() ) );
         if ( isOwnOutput )
         {
+            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-own-output", null ) );
             return null;
         }
 
@@ -55,6 +62,7 @@ public class FhirImmunizationToDhisEventConverter
         // tracked entity for an unknown patient is out of scope for this first version.
         if ( patient.getIdentifier().isEmpty() )
         {
+            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-not-mapped", null ) );
             return null;
         }
         String trackedEntityId = patient.getIdentifierFirstRep().getValue();
@@ -81,6 +89,7 @@ public class FhirImmunizationToDhisEventConverter
         }
         if ( existingEventId == null )
         {
+            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-no-existing-event", null ) );
             return null;
         }
 
@@ -101,6 +110,10 @@ public class FhirImmunizationToDhisEventConverter
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put( "events", List.of( event ) );
+
+        syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "updated",
+            "DHIS2 event/" + existingEventId + " (trackedEntity " + trackedEntityId + ")" ) );
+
         return payload;
     }
 }

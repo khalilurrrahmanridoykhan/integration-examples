@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.camel.component.dhis2.api.Dhis2Resource;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.ImmunizationAndPatient;
+import org.hisp.dhis.fhir.domain.SyncLog;
+import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.DateTimeType;
@@ -32,12 +34,17 @@ public class VaccinationEventToImmunizationConverter
 
     private final DhisProperties dhisProperties;
 
+    private final SyncLogRepository syncLogRepository;
+
     @SuppressWarnings( "unchecked" )
     public ImmunizationAndPatient eventToImmunization( Dhis2Resource event )
     {
+        String eventId = (String) event.get( "event" );
+
         List<Map<String, Object>> dataValues = (List<Map<String, Object>>) event.get( "dataValues" );
         if ( dataValues == null )
         {
+            syncLogRepository.save( new SyncLog( "dhis2-to-fhir", eventId, "skipped-no-data-values", null ) );
             return null;
         }
 
@@ -47,10 +54,10 @@ public class VaccinationEventToImmunizationConverter
 
         if ( !bcgGiven )
         {
+            syncLogRepository.save( new SyncLog( "dhis2-to-fhir", eventId, "skipped-not-bcg", null ) );
             return null;
         }
 
-        String eventId = (String) event.get( "event" );
         String trackedEntityId = (String) event.get( "trackedEntity" );
 
         // Minimal Patient, created in the same bundle so Immunization.patient resolves --
@@ -78,6 +85,9 @@ public class VaccinationEventToImmunizationConverter
         immunization.getIdentifier().add(
             new Identifier().setSystem( dhisProperties.getBaseUrl() + "/api/tracker/events" )
                 .setValue( eventId ) );
+
+        syncLogRepository.save( new SyncLog( "dhis2-to-fhir", eventId, "created",
+            "Immunization/" + eventId + ", Patient/" + trackedEntityId ) );
 
         return new ImmunizationAndPatient( immunization, patient );
     }
