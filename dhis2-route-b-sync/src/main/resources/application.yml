@@ -10,6 +10,6 @@ dhis2-to-fhir:
     username: admin
     password: district
   fhir:
-    server-url: http://localhost:8081/baseR4
+    server-url: http://localhost:8081/fhir
     fhir-version: R4
 
