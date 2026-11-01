@@ -16,6 +16,45 @@ dhis2-to-fhir:
     base-url: https://play.im.dhis2.org/dev/api
     username: admin
     password: district
+    # Which DHIS2 program/org unit Route A and B sync Immunizations against, and which of
+    # that program's data elements represent vaccine doses. Change these (and redeploy) to
+    # point this service at a different DHIS2 program/org unit/vaccine set -- no code change
+    # or recompile needed. cvx-code is this vaccine's FHIR CVX code; boolean-style: true
+    # means the DHIS2 data element is a plain BOOLEAN ("true"/"false" dose given or not),
+    # false means it's TEXT holding a dose number (e.g. "1", "2").
+    org-unit: DiszpKrYNg8
+    program: IpHINAT79UW
+    vaccines:
+      - data-element-id: bx6fsa0t90x
+        program-stage: A03MvHHogjR
+        cvx-code: "19"
+        cvx-display: BCG
+        boolean-style: true
+      - data-element-id: ebaJjqltK5N
+        program-stage: A03MvHHogjR
+        cvx-code: "02"
+        cvx-display: OPV
+        boolean-style: false
+      - data-element-id: FqlgKAG8HOu
+        program-stage: ZzYYXq4fJie
+        cvx-code: "05"
+        cvx-display: measles
+        boolean-style: true
+      - data-element-id: rxBfISxXS2U
+        program-stage: ZzYYXq4fJie
+        cvx-code: "37"
+        cvx-display: yellow fever
+        boolean-style: true
+      - data-element-id: vTUhAUZFoys
+        program-stage: ZzYYXq4fJie
+        cvx-code: "110"
+        cvx-display: DTaP-Hep B-IPV (Penta)
+        boolean-style: false
+      - data-element-id: pOe0ogW4OWd
+        program-stage: ZzYYXq4fJie
+        cvx-code: "107"
+        cvx-display: DTaP, unspecified formulation
+        boolean-style: false
   fhir:
     server-url: http://localhost:8081/fhir
     fhir-version: R4

@@ -4,6 +4,7 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import lombok.RequiredArgsConstructor;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.config.VaccineConfig;
+import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
@@ -33,7 +34,6 @@ public class FhirImmunizationToDhisEventConverter
     private static final String SYNC_ORIGIN_TAG_CODE = "dhis2-sync";
     private static final String CVX_SYSTEM = "http://hl7.org/fhir/sid/cvx";
 
-    private static final String ORG_UNIT = "DiszpKrYNg8";
     private static final String PERSON_TRACKED_ENTITY_TYPE = "nEenWmSyUEp";
     private static final String GENDER_ATTRIBUTE = "cejWyOfXge6";
     private static final String FIRST_NAME_ATTRIBUTE = "w75KJ2mc4zz";
@@ -42,6 +42,10 @@ public class FhirImmunizationToDhisEventConverter
     private final IGenericClient fhirClient;
 
     private final Dhis2Client dhis2Client;
+
+    private final DhisProperties dhisProperties;
+
+    private final VaccineCatalog vaccineCatalog;
 
     private final SyncLogRepository syncLogRepository;
 
@@ -67,7 +71,7 @@ public class FhirImmunizationToDhisEventConverter
             .filter( coding -> CVX_SYSTEM.equals( coding.getSystem() ) )
             .map( Coding::getCode )
             .findFirst()
-            .flatMap( VaccineCatalog::byCvxCode );
+            .flatMap( vaccineCatalog::byCvxCode );
 
         if ( vaccine.isEmpty() )
         {
@@ -108,7 +112,7 @@ public class FhirImmunizationToDhisEventConverter
             .withFields( "event,enrollment" )
             .withoutPaging()
             .withParameter( "trackedEntity", trackedEntityId )
-            .withParameter( "program", VaccineCatalog.PROGRAM )
+            .withParameter( "program", vaccineCatalog.getProgram() )
             .withParameter( "programStage", vaccine.get().getProgramStageId() )
             .transfer()
             .returnAs( Map.class, "events" );
@@ -133,9 +137,9 @@ public class FhirImmunizationToDhisEventConverter
 
         Map<String, Object> event = new LinkedHashMap<>();
         event.put( "event", existingEventId );
-        event.put( "program", VaccineCatalog.PROGRAM );
+        event.put( "program", vaccineCatalog.getProgram() );
         event.put( "programStage", vaccine.get().getProgramStageId() );
-        event.put( "orgUnit", ORG_UNIT );
+        event.put( "orgUnit", dhisProperties.getOrgUnit() );
         event.put( "trackedEntity", trackedEntityId );
         event.put( "enrollment", enrollmentId );
         event.put( "occurredAt", immunization.getOccurrenceDateTimeType().getValueAsString() );
@@ -169,23 +173,23 @@ public class FhirImmunizationToDhisEventConverter
         String occurredAt = immunization.getOccurrenceDateTimeType().getValueAsString();
 
         Map<String, Object> event = new LinkedHashMap<>();
-        event.put( "program", VaccineCatalog.PROGRAM );
+        event.put( "program", vaccineCatalog.getProgram() );
         event.put( "programStage", vaccine.getProgramStageId() );
-        event.put( "orgUnit", ORG_UNIT );
+        event.put( "orgUnit", dhisProperties.getOrgUnit() );
         event.put( "occurredAt", occurredAt );
         event.put( "status", "COMPLETED" );
         event.put( "dataValues", List.of( dataValue ) );
 
         Map<String, Object> enrollment = new LinkedHashMap<>();
-        enrollment.put( "program", VaccineCatalog.PROGRAM );
-        enrollment.put( "orgUnit", ORG_UNIT );
+        enrollment.put( "program", vaccineCatalog.getProgram() );
+        enrollment.put( "orgUnit", dhisProperties.getOrgUnit() );
         enrollment.put( "status", "ACTIVE" );
         enrollment.put( "enrolledAt", LocalDate.now().toString() );
         enrollment.put( "occurredAt", occurredAt );
         enrollment.put( "events", List.of( event ) );
 
         Map<String, Object> trackedEntity = new LinkedHashMap<>();
-        trackedEntity.put( "orgUnit", ORG_UNIT );
+        trackedEntity.put( "orgUnit", dhisProperties.getOrgUnit() );
         trackedEntity.put( "trackedEntityType", PERSON_TRACKED_ENTITY_TYPE );
         trackedEntity.put( "attributes", demographicAttributes( patient ) );
         trackedEntity.put( "enrollments", List.of( enrollment ) );

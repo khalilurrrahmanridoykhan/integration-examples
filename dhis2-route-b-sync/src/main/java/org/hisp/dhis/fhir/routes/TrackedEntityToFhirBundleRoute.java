@@ -3,6 +3,8 @@ package org.hisp.dhis.fhir.routes;
 import lombok.RequiredArgsConstructor;
 import org.apache.camel.builder.RouteBuilder;
 import org.hisp.dhis.fhir.aggregate.PatientBundleAggregationStrategy;
+import org.hisp.dhis.fhir.config.VaccineCatalog;
+import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.config.properties.FhirProperties;
 import org.hisp.dhis.fhir.converters.TrackedEntityToPatientConverter;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TrackedEntityToFhirBundleRoute extends RouteBuilder
 {
+    private final DhisProperties dhisProperties;
+
+    private final VaccineCatalog vaccineCatalog;
+
     private final FhirProperties fhirProperties;
 
     private final TrackedEntityToPatientConverter trackedEntityToPatientConverter;
@@ -30,7 +36,8 @@ public class TrackedEntityToFhirBundleRoute extends RouteBuilder
             // (confirmed live: total stayed at 17,380 regardless of org unit with either of
             // those names, and only dropped to a real 36 with "orgUnits"). Inconsistent with
             // tracker/events, which uses the singular "orgUnit" -- a real API quirk, not a typo.
-            .setHeader( "CamelDhis2.queryParams", () -> Map.of( "orgUnits", "DiszpKrYNg8", "program", "IpHINAT79UW" ) )
+            .setHeader( "CamelDhis2.queryParams",
+                () -> Map.of( "orgUnits", dhisProperties.getOrgUnit(), "program", vaccineCatalog.getProgram() ) )
             .to("dhis2://get/collection?path=tracker/trackedEntities&arrayName=trackedEntities&client=#dhis2Client")
             .log( "Converting DHIS2 tracked entities to FHIR patients..." )
             .split().body().aggregationStrategy( new PatientBundleAggregationStrategy() )

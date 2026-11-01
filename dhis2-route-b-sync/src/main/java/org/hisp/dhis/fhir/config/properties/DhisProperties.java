@@ -33,6 +33,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
 import javax.validation.constraints.NotNull;
+import java.util.List;
 
 @Data
 @Component
@@ -48,4 +49,58 @@ public class DhisProperties
 
     @NotNull
     private String password;
+
+    // Which DHIS2 program/org unit Route A and B operate against, and which of that
+    // program's data elements represent vaccine doses. The field defaults below reproduce
+    // the DHIS2 demo's "Child Programme" exactly as this service originally shipped, but
+    // every value is overridable in application.yml -- pointing this service at a different
+    // program/org unit/vaccine set is then a config change, not a recompile.
+    @NotNull
+    private String orgUnit = "DiszpKrYNg8";
+
+    @NotNull
+    private String program = "IpHINAT79UW";
+
+    private List<VaccineProperties> vaccines = List.of(
+        new VaccineProperties( "bx6fsa0t90x", "A03MvHHogjR", "19", "BCG", true ),
+        new VaccineProperties( "ebaJjqltK5N", "A03MvHHogjR", "02", "OPV", false ),
+        new VaccineProperties( "FqlgKAG8HOu", "ZzYYXq4fJie", "05", "measles", true ),
+        new VaccineProperties( "rxBfISxXS2U", "ZzYYXq4fJie", "37", "yellow fever", true ),
+        new VaccineProperties( "vTUhAUZFoys", "ZzYYXq4fJie", "110", "DTaP-Hep B-IPV (Penta)", false ),
+        new VaccineProperties( "pOe0ogW4OWd", "ZzYYXq4fJie", "107", "DTaP, unspecified formulation", false )
+    );
+
+    // One row of the configured vaccine catalog -- see VaccineCatalog, which turns these
+    // into VaccineConfig instances at startup.
+    @Data
+    public static class VaccineProperties
+    {
+        @NotNull
+        private String dataElementId;
+
+        @NotNull
+        private String programStage;
+
+        @NotNull
+        private String cvxCode;
+
+        @NotNull
+        private String cvxDisplay;
+
+        private boolean booleanStyle;
+
+        public VaccineProperties()
+        {
+        }
+
+        public VaccineProperties( String dataElementId, String programStage, String cvxCode, String cvxDisplay,
+            boolean booleanStyle )
+        {
+            this.dataElementId = dataElementId;
+            this.programStage = programStage;
+            this.cvxCode = cvxCode;
+            this.cvxDisplay = cvxDisplay;
+            this.booleanStyle = booleanStyle;
+        }
+    }
 }

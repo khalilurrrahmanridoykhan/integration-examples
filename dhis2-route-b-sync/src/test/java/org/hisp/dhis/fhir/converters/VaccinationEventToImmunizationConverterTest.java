@@ -21,6 +21,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @ExtendWith( MockitoExtension.class )
 class VaccinationEventToImmunizationConverterTest
 {
+    // Same demo value as DhisProperties' own default -- see application.yml for how an
+    // operator would override this to point at a different DHIS2 program stage.
+    private static final String BIRTH_STAGE = "A03MvHHogjR";
+
     @Mock
     private SyncLogRepository syncLogRepository;
 
@@ -33,14 +37,15 @@ class VaccinationEventToImmunizationConverterTest
         dhisProperties.setBaseUrl( "https://play.im.dhis2.org/dev/api" );
         dhisProperties.setUsername( "admin" );
         dhisProperties.setPassword( "district" );
-        converter = new VaccinationEventToImmunizationConverter( dhisProperties, syncLogRepository );
+        VaccineCatalog vaccineCatalog = new VaccineCatalog( dhisProperties );
+        converter = new VaccinationEventToImmunizationConverter( dhisProperties, vaccineCatalog, syncLogRepository );
     }
 
     private Dhis2Resource birthStageEvent( String bcgValue, String opvValue )
     {
         Dhis2Resource event = new Dhis2Resource();
         event.put( "event", "evt1" );
-        event.put( "programStage", VaccineCatalog.BIRTH_STAGE );
+        event.put( "programStage", BIRTH_STAGE );
         event.put( "trackedEntity", "te1" );
         event.put( "occurredAt", "2024-01-01T00:00:00.000" );
         event.put( "dataValues", List.of(
@@ -83,7 +88,7 @@ class VaccinationEventToImmunizationConverterTest
     {
         Dhis2Resource event = new Dhis2Resource();
         event.put( "event", "evt1" );
-        event.put( "programStage", VaccineCatalog.BIRTH_STAGE );
+        event.put( "programStage", BIRTH_STAGE );
 
         List<ImmunizationAndPatient> results = converter.eventToImmunization( event );
 

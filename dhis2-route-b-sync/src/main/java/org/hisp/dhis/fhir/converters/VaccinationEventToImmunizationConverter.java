@@ -34,6 +34,8 @@ public class VaccinationEventToImmunizationConverter
 
     private final DhisProperties dhisProperties;
 
+    private final VaccineCatalog vaccineCatalog;
+
     private final SyncLogRepository syncLogRepository;
 
     // One DHIS2 event can carry more than one vaccine dose (e.g. the Birth stage event
@@ -54,7 +56,7 @@ public class VaccinationEventToImmunizationConverter
             return results;
         }
 
-        for ( VaccineConfig vaccine : VaccineCatalog.forProgramStage( programStage ) )
+        for ( VaccineConfig vaccine : vaccineCatalog.forProgramStage( programStage ) )
         {
             String value = dataValues.stream()
                 .filter( dv -> vaccine.getDataElementId().equals( dv.get( "dataElement" ) ) )

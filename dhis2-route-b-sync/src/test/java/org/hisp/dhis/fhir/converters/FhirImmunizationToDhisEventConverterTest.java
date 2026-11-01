@@ -7,6 +7,7 @@ import ca.uhn.fhir.rest.gclient.IReadTyped;
 import ca.uhn.fhir.rest.gclient.IUpdate;
 import ca.uhn.fhir.rest.gclient.IUpdateTyped;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
+import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
 import org.hisp.dhis.integration.sdk.api.Dhis2Response;
@@ -40,6 +41,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith( MockitoExtension.class )
 class FhirImmunizationToDhisEventConverterTest
 {
+    // Same demo values as DhisProperties' own defaults -- see application.yml for how an
+    // operator would override these to point at a different DHIS2 program/org unit.
+    private static final String PROGRAM = "IpHINAT79UW";
+    private static final String BABY_POSTNATAL_STAGE = "ZzYYXq4fJie";
+
     @Mock
     private IGenericClient fhirClient;
 
@@ -54,7 +60,10 @@ class FhirImmunizationToDhisEventConverterTest
     @BeforeEach
     void setUp()
     {
-        converter = new FhirImmunizationToDhisEventConverter( fhirClient, dhis2Client, syncLogRepository );
+        DhisProperties dhisProperties = new DhisProperties();
+        VaccineCatalog vaccineCatalog = new VaccineCatalog( dhisProperties );
+        converter = new FhirImmunizationToDhisEventConverter( fhirClient, dhis2Client, dhisProperties, vaccineCatalog,
+            syncLogRepository );
     }
 
     private Immunization measlesImmunization( boolean ownOutputTag )
@@ -216,8 +225,8 @@ class FhirImmunizationToDhisEventConverterTest
         assertEquals( "existingEvt", event.get( "event" ) );
         assertEquals( "enr1", event.get( "enrollment" ) );
         assertEquals( "te1", event.get( "trackedEntity" ) );
-        assertEquals( VaccineCatalog.PROGRAM, event.get( "program" ) );
-        assertEquals( VaccineCatalog.BABY_POSTNATAL_STAGE, event.get( "programStage" ) );
+        assertEquals( PROGRAM, event.get( "program" ) );
+        assertEquals( BABY_POSTNATAL_STAGE, event.get( "programStage" ) );
 
         List<Map<String, Object>> dataValues = (List<Map<String, Object>>) event.get( "dataValues" );
         assertEquals( 1, dataValues.size() );
