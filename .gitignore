@@ -38,3 +38,5 @@ docker/artifacts
 # ignore local docker override files
 docker-compose.override.yml
 .db-dump
+sync-log-db.mv.db
+sync-log-db.trace.db

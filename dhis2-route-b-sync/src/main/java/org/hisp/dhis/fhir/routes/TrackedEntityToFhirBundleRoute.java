@@ -19,7 +19,14 @@ public class TrackedEntityToFhirBundleRoute extends RouteBuilder
     @Override
     public void configure()
     {
-        from( "timer://teSync?period=3600000" ).routeId( "dhis2-te-to-fhir-bundle" )
+        // timer and direct both feed the same logic, so a manual REST trigger
+        // (SyncTriggerController -> direct:trackedEntitiesToFhirSync) runs the identical route.
+        // NOTE: still uses the legacy trackedEntityInstances API (see class-level history) --
+        // triggering this returns a 404 against current DHIS2, same as the scheduled run.
+        from( "timer://teSync?period=3600000" ).routeId( "dhis2-te-to-fhir-bundle-timer" )
+            .to( "direct:trackedEntitiesToFhirSync" );
+
+        from( "direct:trackedEntitiesToFhirSync" ).routeId( "dhis2-te-to-fhir-bundle" )
             .setHeader( "CamelDhis2.queryParams", () -> Map.of( "ou", "DiszpKrYNg8", "program", "IpHINAT79UW" ) )
             .to("dhis2://get/collection?path=trackedEntityInstances&arrayName=trackedEntityInstances&client=#dhis2Client")
             .log( "Converting DHIS2 tracked entities to FHIR patients..." )

@@ -10,8 +10,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
-// Manual trigger for the two Immunization sync routes, alongside their hourly schedule --
-// each direct: endpoint runs the exact same route the timer fires (see the routes' comments).
+// Manual trigger for every sync route, alongside each one's hourly schedule -- each
+// direct: endpoint runs the exact same route the timer fires (see the routes' own comments).
+// Renamed from the original "dhis2-to-fhir"/"fhir-to-dhis2" (Immunization-only) keys once
+// org-units/option-sets/tracked-entities were added, since those names were ambiguous once
+// more than one resource type existed per direction.
 @RestController
 @RequestMapping( "/api/sync" )
 @RequiredArgsConstructor
@@ -20,8 +23,12 @@ public class SyncTriggerController
     private final ProducerTemplate producerTemplate;
 
     private static final Map<String, String> DIRECT_ENDPOINT_BY_TYPE = Map.of(
-        "dhis2-to-fhir", "direct:dhis2ToFhirSync",
-        "fhir-to-dhis2", "direct:fhirToDhis2Sync"
+        "immunization-to-fhir", "direct:dhis2ToFhirSync",
+        "immunization-to-dhis2", "direct:fhirToDhis2Sync",
+        "org-units-to-fhir", "direct:orgUnitsToFhirSync",
+        "option-sets-to-fhir", "direct:optionSetsToFhirSync",
+        // still 404s against current DHIS2 (legacy API) -- see the route's own comment
+        "tracked-entities-to-fhir", "direct:trackedEntitiesToFhirSync"
     );
 
     @PostMapping( "/{type}" )
