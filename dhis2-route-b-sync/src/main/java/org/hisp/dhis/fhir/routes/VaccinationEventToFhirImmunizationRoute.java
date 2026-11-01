@@ -20,7 +20,12 @@ public class VaccinationEventToFhirImmunizationRoute extends RouteBuilder
     @Override
     public void configure()
     {
-        from( "timer://vaccinationSync?period=3600000" ).routeId( "dhis2-vaccination-to-fhir-immunization" )
+        // timer and direct both feed the same logic, so a manual REST trigger
+        // (SyncTriggerController -> direct:dhis2ToFhirSync) runs the identical route.
+        from( "timer://vaccinationSync?period=3600000" ).routeId( "dhis2-vaccination-to-fhir-immunization-timer" )
+            .to( "direct:dhis2ToFhirSync" );
+
+        from( "direct:dhis2ToFhirSync" ).routeId( "dhis2-vaccination-to-fhir-immunization" )
             .setHeader( "CamelDhis2.queryParams",
                 () -> Map.of( "program", "IpHINAT79UW", "programStage", "A03MvHHogjR", "orgUnit", "DiszpKrYNg8" ) )
             .to( "dhis2://get/collection?path=tracker/events&arrayName=events&client=#dhis2Client" )

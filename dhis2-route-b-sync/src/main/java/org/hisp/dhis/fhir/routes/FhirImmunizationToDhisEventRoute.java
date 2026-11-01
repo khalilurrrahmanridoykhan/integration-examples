@@ -26,7 +26,12 @@ public class FhirImmunizationToDhisEventRoute extends RouteBuilder
     @Override
     public void configure()
     {
-        from( "timer://fhirToDhisSync?period=3600000" ).routeId( "fhir-immunization-to-dhis2-event" )
+        // timer and direct both feed the same logic, so a manual REST trigger
+        // (SyncTriggerController -> direct:fhirToDhis2Sync) runs the identical route.
+        from( "timer://fhirToDhisSync?period=3600000" ).routeId( "fhir-immunization-to-dhis2-event-timer" )
+            .to( "direct:fhirToDhis2Sync" );
+
+        from( "direct:fhirToDhis2Sync" ).routeId( "fhir-immunization-to-dhis2-event" )
             .process( exchange -> {
                 Bundle bundle = fhirClient.search().forResource( Immunization.class )
                     .returnBundle( Bundle.class )
