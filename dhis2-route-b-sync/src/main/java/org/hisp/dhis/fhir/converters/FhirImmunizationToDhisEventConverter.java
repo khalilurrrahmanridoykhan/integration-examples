@@ -2,9 +2,12 @@ package org.hisp.dhis.fhir.converters;
 
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import lombok.RequiredArgsConstructor;
+import org.hisp.dhis.fhir.config.VaccineCatalog;
+import org.hisp.dhis.fhir.config.VaccineConfig;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
+import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Immunization;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.stereotype.Component;
@@ -12,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 // Route A: FHIR -> DHIS2 (the reverse of VaccinationEventToImmunizationConverter).
 // A plain Spring bean invoked via .bean(...) from the route, not a Camel type converter --
@@ -23,11 +27,9 @@ public class FhirImmunizationToDhisEventConverter
 {
     private static final String SYNC_ORIGIN_TAG_SYSTEM = "https://dhis2.org/fhir/sync-origin";
     private static final String SYNC_ORIGIN_TAG_CODE = "dhis2-sync";
+    private static final String CVX_SYSTEM = "http://hl7.org/fhir/sid/cvx";
 
-    private static final String PROGRAM = "IpHINAT79UW";
-    private static final String PROGRAM_STAGE = "A03MvHHogjR";
     private static final String ORG_UNIT = "DiszpKrYNg8";
-    private static final String BCG_DOSE_DATA_ELEMENT = "bx6fsa0t90x";
 
     private final IGenericClient fhirClient;
 
@@ -53,6 +55,18 @@ public class FhirImmunizationToDhisEventConverter
             return null;
         }
 
+        Optional<VaccineConfig> vaccine = immunization.getVaccineCode().getCoding().stream()
+            .filter( coding -> CVX_SYSTEM.equals( coding.getSystem() ) )
+            .map( Coding::getCode )
+            .findFirst()
+            .flatMap( VaccineCatalog::byCvxCode );
+
+        if ( vaccine.isEmpty() )
+        {
+            syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "skipped-unknown-vaccine", null ) );
+            return null;
+        }
+
         String patientReference = immunization.getPatient().getReference();
         String patientId = patientReference.substring( patientReference.lastIndexOf( '/' ) + 1 );
         Patient patient = fhirClient.read().resource( Patient.class ).withId( patientId ).execute();
@@ -67,15 +81,16 @@ public class FhirImmunizationToDhisEventConverter
         }
         String trackedEntityId = patient.getIdentifierFirstRep().getValue();
 
-        // "Birth" is a non-repeatable program stage -- DHIS2 rejects a second new event
-        // for an enrollment that already has one there (E1039). The existing event must be
-        // updated instead of creating a new one, so resolve both its id and its enrollment.
+        // The Birth and Baby Postnatal stages are both non-repeatable -- DHIS2 rejects a
+        // second new event for an enrollment that already has one there (E1039). The
+        // existing event must be updated instead of creating a new one, so resolve both its
+        // id and its enrollment, scoped to whichever stage this vaccine's data element lives in.
         Iterable<Map> existingEvents = dhis2Client.get( "tracker/events" )
             .withFields( "event,enrollment" )
             .withoutPaging()
             .withParameter( "trackedEntity", trackedEntityId )
-            .withParameter( "program", PROGRAM )
-            .withParameter( "programStage", PROGRAM_STAGE )
+            .withParameter( "program", VaccineCatalog.PROGRAM )
+            .withParameter( "programStage", vaccine.get().getProgramStageId() )
             .transfer()
             .returnAs( Map.class, "events" );
 
@@ -94,13 +109,13 @@ public class FhirImmunizationToDhisEventConverter
         }
 
         Map<String, Object> dataValue = new LinkedHashMap<>();
-        dataValue.put( "dataElement", BCG_DOSE_DATA_ELEMENT );
-        dataValue.put( "value", "true" );
+        dataValue.put( "dataElement", vaccine.get().getDataElementId() );
+        dataValue.put( "value", vaccine.get().valueWhenGiven() );
 
         Map<String, Object> event = new LinkedHashMap<>();
         event.put( "event", existingEventId );
-        event.put( "program", PROGRAM );
-        event.put( "programStage", PROGRAM_STAGE );
+        event.put( "program", VaccineCatalog.PROGRAM );
+        event.put( "programStage", vaccine.get().getProgramStageId() );
         event.put( "orgUnit", ORG_UNIT );
         event.put( "trackedEntity", trackedEntityId );
         event.put( "enrollment", enrollmentId );
@@ -112,7 +127,8 @@ public class FhirImmunizationToDhisEventConverter
         payload.put( "events", List.of( event ) );
 
         syncLogRepository.save( new SyncLog( "fhir-to-dhis2", immunizationId, "updated",
-            "DHIS2 event/" + existingEventId + " (trackedEntity " + trackedEntityId + ")" ) );
+            "DHIS2 event/" + existingEventId + " (" + vaccine.get().getCvxDisplay()
+                + ", trackedEntity " + trackedEntityId + ")" ) );
 
         return payload;
     }

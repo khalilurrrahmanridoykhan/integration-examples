@@ -33,7 +33,12 @@ public class FhirImmunizationToDhisEventRoute extends RouteBuilder
 
         from( "direct:fhirToDhis2Sync" ).routeId( "fhir-immunization-to-dhis2-event" )
             .process( exchange -> {
+                // Without an explicit count, HAPI's default search page size (20) silently
+                // truncated this -- found live when a newly-added test Immunization past
+                // the first page was never even looked at. 200 is a demo-scale ceiling, not
+                // real pagination; a production version would page through the full result set.
                 Bundle bundle = fhirClient.search().forResource( Immunization.class )
+                    .count( 200 )
                     .returnBundle( Bundle.class )
                     .execute();
 
