@@ -1,0 +1,15 @@
+server:
+  port: 8080
+  address: 127.0.0.1
+camel:
+  springboot:
+    main-run-controller: true
+dhis2-to-fhir:
+  dhis2:
+    base-url: https://play.im.dhis2.org/dev/api
+    username: admin
+    password: district
+  fhir:
+    server-url: http://localhost:8081/baseR4
+    fhir-version: R4
+

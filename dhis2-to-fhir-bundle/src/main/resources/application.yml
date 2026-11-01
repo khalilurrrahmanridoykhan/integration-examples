@@ -6,7 +6,7 @@ camel:
     main-run-controller: true
 dhis2-to-fhir:
   dhis2:
-    base-url: https://play.dhis2.org/dev
+    base-url: https://play.im.dhis2.org/dev/api
     username: admin
     password: district
   fhir:

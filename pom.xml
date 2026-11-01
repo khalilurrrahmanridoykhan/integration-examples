@@ -25,6 +25,7 @@
         <module>integration-test</module>
         <module>data-value-set-sync-dhis2-java-sdk</module>
         <module>dhis2-fhir-gateway/gateway</module>
+        <module>dhis2-route-b-sync</module>
     </modules>
 
     <dependencyManagement>
