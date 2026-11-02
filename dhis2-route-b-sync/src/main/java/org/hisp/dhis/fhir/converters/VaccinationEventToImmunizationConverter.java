@@ -6,6 +6,7 @@ import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.config.VaccineConfig;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.ImmunizationAndPatient;
+import org.hisp.dhis.fhir.domain.PreviewEntry;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.CodeableConcept;
@@ -73,6 +74,41 @@ public class VaccinationEventToImmunizationConverter
 
             results.add( buildImmunizationAndPatient( eventId, trackedEntityId,
                 (String) event.get( "occurredAt" ), vaccine ) );
+        }
+
+        return results;
+    }
+
+    // Mirrors eventToImmunization's own classification logic exactly, but never builds the
+    // FHIR resources or writes to SyncLog -- used only by the preview endpoint.
+    @SuppressWarnings( "unchecked" )
+    public List<PreviewEntry> previewEvent( Dhis2Resource event )
+    {
+        String eventId = (String) event.get( "event" );
+        String programStage = (String) event.get( "programStage" );
+        List<Map<String, Object>> dataValues = (List<Map<String, Object>>) event.get( "dataValues" );
+
+        List<PreviewEntry> results = new ArrayList<>();
+        if ( dataValues == null )
+        {
+            return results;
+        }
+
+        for ( VaccineConfig vaccine : vaccineCatalog.forProgramStage( programStage ) )
+        {
+            String value = dataValues.stream()
+                .filter( dv -> vaccine.getDataElementId().equals( dv.get( "dataElement" ) ) )
+                .map( dv -> (String) dv.get( "value" ) )
+                .findFirst()
+                .orElse( null );
+
+            if ( !vaccine.isGiven( value ) )
+            {
+                results.add( new PreviewEntry( eventId, "skipped-not-" + vaccine.getCvxDisplay(), null ) );
+                continue;
+            }
+
+            results.add( new PreviewEntry( eventId, "would-create", vaccine.getCvxDisplay() ) );
         }
 
         return results;

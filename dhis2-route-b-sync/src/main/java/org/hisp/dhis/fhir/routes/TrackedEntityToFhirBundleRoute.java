@@ -3,6 +3,8 @@ package org.hisp.dhis.fhir.routes;
 import lombok.RequiredArgsConstructor;
 import org.apache.camel.builder.RouteBuilder;
 import org.hisp.dhis.fhir.aggregate.PatientBundleAggregationStrategy;
+import org.hisp.dhis.fhir.config.ScheduleGate;
+import org.hisp.dhis.fhir.config.SyncTypes;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.config.properties.FhirProperties;
@@ -23,12 +25,15 @@ public class TrackedEntityToFhirBundleRoute extends RouteBuilder
 
     private final TrackedEntityToPatientConverter trackedEntityToPatientConverter;
 
+    private final ScheduleGate scheduleGate;
+
     @Override
     public void configure()
     {
-        // timer and direct both feed the same logic, so a manual REST trigger
-        // (SyncTriggerController -> direct:trackedEntitiesToFhirSync) runs the identical route.
-        from( "timer://teSync?period=3600000" ).routeId( "dhis2-te-to-fhir-bundle-timer" )
+        // Ticks every 5 minutes but mostly no-ops -- see OrgUnitToFhirBundleRoute's own
+        // comment on ScheduleGate for why.
+        from( "timer://teSyncTick?period=300000" ).routeId( "dhis2-te-to-fhir-bundle-tick" )
+            .filter( exchange -> scheduleGate.shouldRunNow( SyncTypes.TRACKED_ENTITIES_TO_FHIR ) )
             .to( "direct:trackedEntitiesToFhirSync" );
 
         from( "direct:trackedEntitiesToFhirSync" ).routeId( "dhis2-te-to-fhir-bundle" )

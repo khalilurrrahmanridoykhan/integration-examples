@@ -8,6 +8,7 @@ import ca.uhn.fhir.rest.gclient.IUpdate;
 import ca.uhn.fhir.rest.gclient.IUpdateTyped;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
+import org.hisp.dhis.fhir.domain.PreviewEntry;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
 import org.hisp.dhis.integration.sdk.api.Dhis2Response;
@@ -34,6 +35,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -232,5 +234,59 @@ class FhirImmunizationToDhisEventConverterTest
         assertEquals( 1, dataValues.size() );
         assertEquals( "FqlgKAG8HOu", dataValues.get( 0 ).get( "dataElement" ) );
         assertEquals( "true", dataValues.get( 0 ).get( "value" ) );
+    }
+
+    // The critical safety property of preview: for a brand-new patient, the real method
+    // (immunizationToDhisEventPayload) creates the tracked entity as a side effect of being
+    // called at all, via a direct dhis2Client.post(...) + fhirClient.update(...) -- NOT
+    // deferred to the route's own write step like every other branch. previewImmunization
+    // must describe that outcome without ever making either call.
+    @Test
+    void previewImmunization_newPatient_describesWithoutWritingAnything()
+    {
+        stubPatientRead( new Patient() );
+
+        PreviewEntry entry = converter.previewImmunization( measlesImmunization( false ) );
+
+        assertEquals( "would-create-new-tracked-entity", entry.getAction() );
+        verify( dhis2Client, never() ).post( any() );
+        verify( fhirClient, never() ).update();
+    }
+
+    @Test
+    void previewImmunization_existingPatientWithEvent_describesWouldUpdateWithoutPosting()
+    {
+        Patient patient = new Patient();
+        patient.getIdentifier().add( new Identifier().setValue( "te1" ) );
+        stubPatientRead( patient );
+        stubExistingDhis2Events( List.of( Map.of( "event", "existingEvt" ) ) );
+
+        PreviewEntry entry = converter.previewImmunization( measlesImmunization( false ) );
+
+        assertEquals( "would-update", entry.getAction() );
+        verify( dhis2Client, never() ).post( any() );
+    }
+
+    @Test
+    void previewImmunization_noExistingEvent_skipsWithoutPosting()
+    {
+        Patient patient = new Patient();
+        patient.getIdentifier().add( new Identifier().setValue( "te1" ) );
+        stubPatientRead( patient );
+        stubExistingDhis2Events( List.of() );
+
+        PreviewEntry entry = converter.previewImmunization( measlesImmunization( false ) );
+
+        assertEquals( "skipped-no-existing-event", entry.getAction() );
+        verify( dhis2Client, never() ).post( any() );
+    }
+
+    @Test
+    void previewImmunization_ownOutputTag_skipsWithoutTouchingFhirOrDhis2()
+    {
+        PreviewEntry entry = converter.previewImmunization( measlesImmunization( true ) );
+
+        assertEquals( "skipped-own-output", entry.getAction() );
+        verifyNoInteractions( fhirClient, dhis2Client );
     }
 }

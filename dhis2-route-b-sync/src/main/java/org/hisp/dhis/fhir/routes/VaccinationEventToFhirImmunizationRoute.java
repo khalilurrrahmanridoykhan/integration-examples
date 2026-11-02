@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.RouteDefinition;
 import org.hisp.dhis.fhir.aggregate.ImmunizationBundleAggregationStrategy;
+import org.hisp.dhis.fhir.config.ScheduleGate;
+import org.hisp.dhis.fhir.config.SyncTypes;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.config.properties.FhirProperties;
@@ -26,12 +28,15 @@ public class VaccinationEventToFhirImmunizationRoute extends RouteBuilder
 
     private final VaccinationEventToImmunizationConverter vaccinationEventToImmunizationConverter;
 
+    private final ScheduleGate scheduleGate;
+
     @Override
     public void configure()
     {
-        // timer and direct both feed the same logic, so a manual REST trigger
-        // (SyncTriggerController -> direct:dhis2ToFhirSync) runs the identical route.
-        from( "timer://vaccinationSync?period=3600000" ).routeId( "dhis2-vaccination-to-fhir-immunization-timer" )
+        // Ticks every 5 minutes but mostly no-ops -- see OrgUnitToFhirBundleRoute's own
+        // comment on ScheduleGate for why.
+        from( "timer://vaccinationSyncTick?period=300000" ).routeId( "dhis2-vaccination-to-fhir-immunization-tick" )
+            .filter( exchange -> scheduleGate.shouldRunNow( SyncTypes.IMMUNIZATION_TO_FHIR ) )
             .to( "direct:dhis2ToFhirSync" );
 
         RouteDefinition route = from( "direct:dhis2ToFhirSync" ).routeId( "dhis2-vaccination-to-fhir-immunization" )

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.hisp.dhis.fhir.config.VaccineCatalog;
 import org.hisp.dhis.fhir.config.VaccineConfig;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
+import org.hisp.dhis.fhir.domain.PreviewEntry;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hisp.dhis.integration.sdk.api.Dhis2Client;
@@ -152,6 +153,72 @@ public class FhirImmunizationToDhisEventConverter
                 + ", trackedEntity " + trackedEntityId + ")" ) );
 
         return payload;
+    }
+
+    // Mirrors immunizationToDhisEventPayload's own decision tree exactly, but never
+    // writes to SyncLog, and -- critically -- never calls
+    // createTrackedEntityWithEnrollmentAndEvent, which does a REAL DHIS2 POST + FHIR
+    // Patient update as a side effect of being called at all (not deferred to the
+    // route's own write step like every other branch here). The FHIR read and the
+    // DHIS2 "tracker/events" lookup are both plain GETs, so those stay -- only the
+    // writes are skipped, in favour of describing what they would have done.
+    public PreviewEntry previewImmunization( Immunization immunization )
+    {
+        String immunizationId = immunization.getIdElement().getIdPart();
+
+        boolean isOwnOutput = immunization.getMeta().getTag().stream()
+            .anyMatch( tag -> SYNC_ORIGIN_TAG_SYSTEM.equals( tag.getSystem() )
+                && SYNC_ORIGIN_TAG_CODE.equals( tag.getCode() ) );
+        if ( isOwnOutput )
+        {
+            return new PreviewEntry( immunizationId, "skipped-own-output", null );
+        }
+
+        Optional<VaccineConfig> vaccine = immunization.getVaccineCode().getCoding().stream()
+            .filter( coding -> CVX_SYSTEM.equals( coding.getSystem() ) )
+            .map( Coding::getCode )
+            .findFirst()
+            .flatMap( vaccineCatalog::byCvxCode );
+
+        if ( vaccine.isEmpty() )
+        {
+            return new PreviewEntry( immunizationId, "skipped-unknown-vaccine", null );
+        }
+
+        String patientReference = immunization.getPatient().getReference();
+        String patientId = patientReference.substring( patientReference.lastIndexOf( '/' ) + 1 );
+        Patient patient = fhirClient.read().resource( Patient.class ).withId( patientId ).execute();
+
+        if ( patient.getIdentifier().isEmpty() )
+        {
+            return new PreviewEntry( immunizationId, "would-create-new-tracked-entity",
+                "new patient (" + vaccine.get().getCvxDisplay() + ")" );
+        }
+        String trackedEntityId = patient.getIdentifierFirstRep().getValue();
+
+        Iterable<Map> existingEvents = dhis2Client.get( "tracker/events" )
+            .withFields( "event" )
+            .withoutPaging()
+            .withParameter( "trackedEntity", trackedEntityId )
+            .withParameter( "program", vaccineCatalog.getProgram() )
+            .withParameter( "programStage", vaccine.get().getProgramStageId() )
+            .transfer()
+            .returnAs( Map.class, "events" );
+
+        String existingEventId = null;
+        for ( Map existingEvent : existingEvents )
+        {
+            existingEventId = (String) existingEvent.get( "event" );
+            break;
+        }
+        if ( existingEventId == null )
+        {
+            return new PreviewEntry( immunizationId, "skipped-no-existing-event", null );
+        }
+
+        return new PreviewEntry( immunizationId, "would-update",
+            "DHIS2 event/" + existingEventId + " (" + vaccine.get().getCvxDisplay()
+                + ", trackedEntity " + trackedEntityId + ")" );
     }
 
     // Confirmed live against the real DHIS2 demo: a single tracker import can create a

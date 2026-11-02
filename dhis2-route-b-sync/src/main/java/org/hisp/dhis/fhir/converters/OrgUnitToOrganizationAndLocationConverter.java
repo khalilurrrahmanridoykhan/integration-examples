@@ -7,6 +7,7 @@ import org.apache.camel.TypeConverters;
 import org.hisp.dhis.api.model.v2_39_1.OrganisationUnit;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.OrganizationAndLocation;
+import org.hisp.dhis.fhir.domain.PreviewEntry;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.CodeableConcept;
@@ -38,6 +39,14 @@ public class OrgUnitToOrganizationAndLocationConverter implements TypeConverters
             "Organization/" + organisationUnit.getId().get() + ", Location/" + organisationUnit.getId().get() ) );
 
         return new OrganizationAndLocation( organization, location );
+    }
+
+    // Describes the same outcome the real conversion above would log, without building
+    // the FHIR resources or writing to SyncLog -- used only by the preview endpoint.
+    public PreviewEntry previewOrgUnit( OrganisationUnit organisationUnit )
+    {
+        return new PreviewEntry( organisationUnit.getId().get(), "would-create",
+            "Organization/" + organisationUnit.getId().get() + ", Location/" + organisationUnit.getId().get() );
     }
 
     private Location createLocation( OrganisationUnit organisationUnit )

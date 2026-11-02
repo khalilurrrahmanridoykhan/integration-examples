@@ -6,6 +6,8 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
@@ -25,5 +27,18 @@ public class MainConfiguration
             .defaultHeader( "Accept", MediaType.APPLICATION_JSON_VALUE )
             .basicAuthentication( dhisProperties.getUsername(), dhisProperties.getPassword(), StandardCharsets.UTF_8 )
             .build();
+    }
+
+    // Used by ScheduleController to schedule a one-time future run. In-memory only -- a
+    // pending one-time run is lost on restart, same caveat as any other in-process
+    // scheduled task (not persisted to the database like the recurring schedule is).
+    @Bean
+    public TaskScheduler taskScheduler()
+    {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize( 2 );
+        scheduler.setThreadNamePrefix( "sync-scheduler-" );
+        scheduler.initialize();
+        return scheduler;
     }
 }

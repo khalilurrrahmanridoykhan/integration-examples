@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.camel.component.dhis2.api.Dhis2Resource;
 import org.apache.commons.lang3.StringUtils;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
+import org.hisp.dhis.fhir.domain.PreviewEntry;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.Enumerations;
@@ -57,6 +58,14 @@ public class TrackedEntityToPatientConverter
             "Patient/" + trackedEntityId ) );
 
         return patient;
+    }
+
+    // Describes the same outcome the real conversion above would log, without building
+    // the FHIR Patient or writing to SyncLog -- used only by the preview endpoint.
+    public PreviewEntry previewTrackedEntity( Dhis2Resource trackedEntity )
+    {
+        String trackedEntityId = (String) trackedEntity.get( "trackedEntity" );
+        return new PreviewEntry( trackedEntityId, "would-create", "Patient/" + trackedEntityId );
     }
 
     private Enumerations.AdministrativeGender getGender( String gender )

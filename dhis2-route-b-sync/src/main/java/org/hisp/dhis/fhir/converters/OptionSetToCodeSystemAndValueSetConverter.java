@@ -8,6 +8,7 @@ import org.hisp.dhis.api.model.v2_39_1.Option;
 import org.hisp.dhis.api.model.v2_39_1.OptionSet;
 import org.hisp.dhis.fhir.config.properties.DhisProperties;
 import org.hisp.dhis.fhir.domain.CodeSystemAndValueSet;
+import org.hisp.dhis.fhir.domain.PreviewEntry;
 import org.hisp.dhis.fhir.domain.SyncLog;
 import org.hisp.dhis.fhir.repository.SyncLogRepository;
 import org.hl7.fhir.r4.model.CodeSystem;
@@ -36,6 +37,14 @@ public class OptionSetToCodeSystemAndValueSetConverter implements TypeConverters
             "CodeSystem/" + optionSet.getId().get() + ", ValueSet/" + optionSet.getId().get() ) );
 
         return new CodeSystemAndValueSet( codeSystem, valueSet );
+    }
+
+    // Describes the same outcome the real conversion above would log, without building
+    // the FHIR resources or writing to SyncLog -- used only by the preview endpoint.
+    public PreviewEntry previewOptionSet( OptionSet optionSet )
+    {
+        return new PreviewEntry( optionSet.getId().get(), "would-create",
+            "CodeSystem/" + optionSet.getId().get() + ", ValueSet/" + optionSet.getId().get() );
     }
 
     private CodeSystem createCodeSystem( OptionSet optionSet )

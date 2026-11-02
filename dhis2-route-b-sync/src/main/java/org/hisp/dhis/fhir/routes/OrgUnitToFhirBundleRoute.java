@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.camel.builder.RouteBuilder;
 import org.hisp.dhis.api.model.v2_39_1.OrganisationUnit;
 import org.hisp.dhis.fhir.aggregate.OrganizationAndLocationBundleAggregationStrategy;
+import org.hisp.dhis.fhir.config.ScheduleGate;
+import org.hisp.dhis.fhir.config.SyncTypes;
 import org.hisp.dhis.fhir.config.properties.FhirProperties;
 import org.hisp.dhis.fhir.domain.OrganizationAndLocation;
 import org.springframework.stereotype.Component;
@@ -14,12 +16,17 @@ public class OrgUnitToFhirBundleRoute extends RouteBuilder
 {
     private final FhirProperties fhirProperties;
 
+    private final ScheduleGate scheduleGate;
+
     @Override
     public void configure()
     {
-        // timer and direct both feed the same logic, so a manual REST trigger
-        // (SyncTriggerController -> direct:orgUnitsToFhirSync) runs the identical route.
-        from( "timer://ouSync?period=3600000" ).routeId( "dhis2-ou-to-fhir-bundle-timer" )
+        // Ticks every 5 minutes but mostly no-ops -- ScheduleGate decides whether this
+        // type is actually due (AUTOMATIC + interval elapsed) or MANUAL (never auto-runs).
+        // See ScheduleGate's own comment on why this polling approach beats trying to
+        // rebuild the timer route itself with a reconfigured period.
+        from( "timer://ouSyncTick?period=300000" ).routeId( "dhis2-ou-to-fhir-bundle-tick" )
+            .filter( exchange -> scheduleGate.shouldRunNow( SyncTypes.ORG_UNITS_TO_FHIR ) )
             .to( "direct:orgUnitsToFhirSync" );
 
         from( "direct:orgUnitsToFhirSync" ).routeId( "dhis2-ou-to-fhir-bundle" )

@@ -3,6 +3,8 @@ package org.hisp.dhis.fhir.routes;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import lombok.RequiredArgsConstructor;
 import org.apache.camel.builder.RouteBuilder;
+import org.hisp.dhis.fhir.config.ScheduleGate;
+import org.hisp.dhis.fhir.config.SyncTypes;
 import org.hisp.dhis.fhir.converters.FhirImmunizationToDhisEventConverter;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Immunization;
@@ -23,12 +25,15 @@ public class FhirImmunizationToDhisEventRoute extends RouteBuilder
 
     private final FhirImmunizationToDhisEventConverter fhirImmunizationToDhisEventConverter;
 
+    private final ScheduleGate scheduleGate;
+
     @Override
     public void configure()
     {
-        // timer and direct both feed the same logic, so a manual REST trigger
-        // (SyncTriggerController -> direct:fhirToDhis2Sync) runs the identical route.
-        from( "timer://fhirToDhisSync?period=3600000" ).routeId( "fhir-immunization-to-dhis2-event-timer" )
+        // Ticks every 5 minutes but mostly no-ops -- see OrgUnitToFhirBundleRoute's own
+        // comment on ScheduleGate for why.
+        from( "timer://fhirToDhisSyncTick?period=300000" ).routeId( "fhir-immunization-to-dhis2-event-tick" )
+            .filter( exchange -> scheduleGate.shouldRunNow( SyncTypes.IMMUNIZATION_TO_DHIS2 ) )
             .to( "direct:fhirToDhis2Sync" );
 
         from( "direct:fhirToDhis2Sync" ).routeId( "fhir-immunization-to-dhis2-event" )
